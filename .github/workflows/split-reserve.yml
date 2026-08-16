@@ -1,0 +1,67 @@
+name: Split reserve document
+
+on:
+  push:
+    paths:
+      - 'Новий текстовий документ.txt'
+      - '.github/workflows/split-reserve.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Split full reserve into searchable chunks
+        shell: python
+        run: |
+          from pathlib import Path
+          import math
+
+          src = Path('Новий текстовий документ.txt')
+          text = src.read_text(encoding='utf-8')
+          lines = text.splitlines(keepends=True)
+          chunk_size = 1000
+
+          outdir = Path('Резерв_по_частям')
+          outdir.mkdir(exist_ok=True)
+
+          # Remove only previously generated chunk files.
+          for p in outdir.glob('Часть_*.txt'):
+              p.unlink()
+
+          total = math.ceil(len(lines) / chunk_size)
+          index = [
+              '# Резервный документ — разбивка по частям',
+              '',
+              'Исходный полный файл: Новий текстовий документ.txt',
+              'Полный файл НЕ удаляется и остаётся главным резервом.',
+              '',
+              f'Всего строк: {len(lines)}',
+              f'Всего частей: {total}',
+              '',
+          ]
+
+          for i in range(total):
+              start = i * chunk_size
+              end = min((i + 1) * chunk_size, len(lines))
+              name = f'Часть_{i+1:02d}_строки_{start+1}-{end}.txt'
+              (outdir / name).write_text(
+                  f'# Резервная часть {i+1}/{total}\n'
+                  f'# Строки исходного файла: {start+1}-{end}\n\n'
+                  + ''.join(lines[start:end]),
+                  encoding='utf-8'
+              )
+              index.append(f'- {name}')
+
+          (outdir / '00_ИНДЕКС_ЧАСТЕЙ.txt').write_text('\n'.join(index) + '\n', encoding='utf-8')
+
+      - name: Commit generated chunks
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add 'Резерв_по_частям'
+          git diff --cached --quiet || git commit -m 'Split full reserve document into searchable parts'
+          git push
