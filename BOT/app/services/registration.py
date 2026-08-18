@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models import Character, User, World, WorldMember
@@ -35,6 +34,7 @@ async def create_character(
     user: User,
     world: World,
     name: str,
+    continent: str,
     gender: str,
     race: str,
 ) -> Character:
@@ -43,6 +43,7 @@ async def create_character(
         world_id=world.id,
         user_id=user.id,
         name=name,
+        continent=continent,
         gender=gender,
         race=race,
         age=18,
