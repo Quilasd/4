@@ -11,6 +11,7 @@ class Character(Base):
     world_id: Mapped[int] = mapped_column(ForeignKey("worlds.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(64), nullable=False)
+    continent: Mapped[str] = mapped_column(String(64), nullable=False)
     race: Mapped[str | None] = mapped_column(String(64))
     gender: Mapped[str | None] = mapped_column(String(16))
     age: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
