@@ -34,9 +34,9 @@ async def create_character(
     user: User,
     world: World,
     name: str,
-    continent: str,
     gender: str,
     race: str,
+    continent: str,
 ) -> Character:
     await join_world(session, user, world)
     character = Character(
