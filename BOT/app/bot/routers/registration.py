@@ -2,16 +2,26 @@ from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from sqlalchemy import select
 
-from app.bot.keyboards.registration import gender_menu, race_menu, world_menu
+from app.bot.keyboards.registration import continent_menu, gender_menu, race_menu, world_menu
 from app.bot.states.registration import RegistrationStates
 from app.database.models import World
 from app.database.session import SessionFactory
 from app.services.registration import create_character, get_active_worlds, get_or_create_user
 
 router = Router(name="registration")
-RACES = ["Человек", "Эльф", "Дварф", "Орк"]
+
+CONTINENTS = [
+    ("continent_1", "🌍 Континент I"),
+    ("continent_2", "🌎 Континент II"),
+    ("continent_3", "🌏 Континент III"),
+]
+RACES = [
+    ("human", "🧑 Человек"),
+    ("elf", "🧝 Эльф"),
+    ("half_elf", "🧝‍♂️ Полуэльф"),
+    ("dwarf", "⛏️ Дворф"),
+]
 
 
 @router.message(CommandStart())
@@ -32,8 +42,8 @@ async def start(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(RegistrationStates.choosing_world, F.data.startswith("world:"))
 async def choose_world(callback: CallbackQuery, state: FSMContext) -> None:
-    action, value = callback.data.split(":", 1)
-    if action != "world" or value == "create":
+    _, value = callback.data.split(":", 1)
+    if value == "create":
         await callback.answer("Создание мира пока доступно только администрации.")
         return
     async with SessionFactory() as session:
@@ -42,6 +52,18 @@ async def choose_world(callback: CallbackQuery, state: FSMContext) -> None:
             await callback.answer("Мир больше недоступен.", show_alert=True)
             return
     await state.update_data(world_id=int(value))
+    await state.set_state(RegistrationStates.choosing_continent)
+    await callback.message.edit_text(
+        "🗺️ Выберите континент, где родился ваш персонаж:",
+        reply_markup=continent_menu(CONTINENTS),
+    )
+    await callback.answer()
+
+
+@router.callback_query(RegistrationStates.choosing_continent, F.data.startswith("continent:"))
+async def choose_continent(callback: CallbackQuery, state: FSMContext) -> None:
+    continent = callback.data.split(":", 1)[1]
+    await state.update_data(continent=continent)
     await state.set_state(RegistrationStates.choosing_name)
     await callback.message.edit_text("🧙 Введите имя персонажа:")
     await callback.answer()
@@ -77,11 +99,20 @@ async def choose_race(callback: CallbackQuery, state: FSMContext) -> None:
         if world is None:
             await callback.answer("Мир не найден.", show_alert=True)
             return
-        character = await create_character(session, user, world, data["name"], data["gender"], race)
+        character = await create_character(
+            session,
+            user,
+            world,
+            data["name"],
+            data["continent"],
+            data["gender"],
+            race,
+        )
     await state.clear()
     await callback.message.edit_text(
         f"✅ Персонаж создан!\n\n"
         f"👤 {character.name}\n"
+        f"🗺️ {character.continent}\n"
         f"🧬 {character.race}\n"
         f"⚔️ Уровень: {character.level}\n\n"
         "Добро пожаловать в мир."
