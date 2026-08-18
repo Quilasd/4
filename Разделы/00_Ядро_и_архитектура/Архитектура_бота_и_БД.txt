@@ -1,0 +1,456 @@
+# ЯДРО БОТА И АРХИТЕКТУРА ПРОЕКТА
+
+## 1. НАЗНАЧЕНИЕ
+
+Этот раздел является техническим фундаментом проекта. Он описывает, на чём работает бот, как разделяется код, где хранятся данные и как обеспечивается изоляция миров.
+
+Игровые правила из других разделов являются источником игровой логики. Этот раздел не переопределяет их, а задаёт техническую основу для реализации.
+
+## 2. ОСНОВНОЙ СТЕК
+
+Рекомендуемый основной стек:
+
+- Python 3.12+;
+- aiogram 3.x — Telegram Bot API и обработчики команд/кнопок;
+- PostgreSQL — основная база данных;
+- SQLAlchemy 2.x — ORM и работа с БД;
+- Alembic — миграции схемы БД;
+- asyncpg — асинхронный драйвер PostgreSQL;
+- Pydantic 2.x — конфигурация и валидация данных;
+- Redis — кэш, временные состояния, блокировки и очереди там, где это действительно необходимо;
+- APScheduler либо собственный планировщик задач — игровые фоновые процессы;
+- Docker Compose — локальная инфраструктура разработки.
+
+SQLite не является основной БД проекта. Она допустима для небольших локальных тестов/прототипов, но рабочая многомировая система должна использовать PostgreSQL.
+
+## 3. ПРИНЦИП МНОГОМИРОВОЙ СИСТЕМЫ
+
+world_id является фундаментальным идентификатором игрового мира.
+
+Практически каждая игровая сущность, относящаяся к конкретному миру, должна быть привязана к world_id напрямую или через однозначную связь.
+
+Нельзя допускать смешивание данных разных миров.
+
+Пример:
+
+user_id → глобальный аккаунт игрока
+user_id + world_id → персонаж/состояние игрока в конкретном мире
+
+Один Telegram-пользователь может иметь разные персонажи в разных мирах.
+
+## 4. ПРИМЕРНАЯ СТРУКТУРА БД
+
+### Глобальные сущности
+
+users
+- id
+- telegram_id
+- created_at
+- status
+
+worlds
+- id / world_id
+- seed
+- name
+- status
+- created_at
+- current_game_date
+- settings
+
+world_admins
+- user_id
+- world_id
+- permission
+
+### Персонажи
+
+characters
+- id
+- user_id
+- world_id
+- name
+- race_id
+- age
+- sex
+- alive
+- birth_date
+- death_date
+- karma
+- reputation
+- stats
+- created_at
+
+character_relationships
+- id
+- world_id
+- character_a_id
+- character_b_id
+- relation_type
+- level
+- started_at
+
+marriages
+- id
+- world_id
+- character_a_id
+- character_b_id
+- status
+- started_at
+- ended_at
+
+pregnancies
+- id
+- world_id
+- mother_id
+- father_id
+- conception_date
+- expected_birth_date
+- status
+
+children / dynasties / inheritance
+- все сущности должны иметь world_id и связи с родителями/наследниками.
+
+### Государства
+
+states
+- id
+- world_id
+- name
+- ruler_id
+- government_type
+- capital_id
+- treasury
+- stability
+- religion_id
+
+state_territories
+- state_id
+- world_id
+- territory_id
+
+cities
+- id
+- world_id
+- state_id
+- name
+- type
+- population
+
+### Экономика
+
+state_treasuries
+- state_id
+- world_id
+- balance
+- income
+- expenses
+
+markets
+- id
+- world_id
+- territory_id
+- resource_id
+- price
+- supply
+- demand
+
+trade_routes
+- id
+- world_id
+- source_id
+- destination_id
+- status
+
+### Армия
+
+military_units
+- id
+- world_id
+- state_id
+- name
+- unit_type
+- commander_id
+- size
+- status
+
+military_hierarchy
+- unit_id
+- parent_unit_id
+- hierarchy_type
+
+Это позволяет создавать пользовательские формирования с собственными названиями: отряды, батальоны, легионы и другие согласованные типы.
+
+knights
+- id
+- world_id
+- state_id
+- character_id
+- rank
+- status
+
+mercenaries
+- id
+- world_id
+- owner_state_id
+- name
+- size
+- contract
+
+### Магия
+
+magic_schools
+- id
+- name
+- type
+
+character_magic
+- character_id
+- world_id
+- school_id
+- rank
+- compatibility_status
+
+spells
+- id
+- school_id
+- name
+- rank
+- effect
+- mana_cost
+- requirements
+- restrictions
+
+character_spells
+- character_id
+- world_id
+- spell_id
+- learned_at
+
+Отдельно хранится состояние несовместимости Святой и Тёмной магии. После изучения Тёмной магии Святая магия должна быть заблокирована навсегда.
+
+### Мир и сущности
+
+continents
+- id
+- world_id
+- name
+- geography_data
+
+territories
+- id
+- world_id
+- continent_id
+- name
+- type
+- owner_state_id
+
+settlements
+- id
+- world_id
+- territory_id
+- name
+- type
+
+monsters
+- id
+- world_id
+- species_id
+- territory_id
+- level
+- status
+
+monster_lairs
+- id
+- world_id
+- territory_id
+- monster_type
+- danger_level
+
+special_locations
+- id
+- world_id
+- territory_id
+- location_type
+- data
+
+### Религии
+
+religions
+- id
+- world_id
+- name
+- doctrine
+- influence
+
+religion_followers
+- character_id
+- world_id
+- religion_id
+- faith_level
+
+religious_institutions
+- id
+- world_id
+- religion_id
+- territory_id
+- type
+
+## 5. ТЕХНИЧЕСКАЯ СТРУКТУРА КОДА
+
+Примерная структура проекта:
+
+app/
+├── main.py
+├── config/
+│   ├── settings.py
+│   └── logging.py
+├── bot/
+│   ├── routers/
+│   ├── keyboards/
+│   ├── middlewares/
+│   └── filters/
+├── core/
+│   ├── permissions/
+│   ├── world_context/
+│   ├── events/
+│   ├── scheduler/
+│   └── exceptions/
+├── database/
+│   ├── models/
+│   ├── repositories/
+│   ├── session.py
+│   └── migrations/
+├── game/
+│   ├── world/
+│   ├── characters/
+│   ├── relationships/
+│   ├── family/
+│   ├── states/
+│   ├── economy/
+│   ├── military/
+│   ├── magic/
+│   ├── religion/
+│   ├── monsters/
+│   └── events/
+├── services/
+│   ├── world_service.py
+│   ├── character_service.py
+│   ├── economy_service.py
+│   ├── military_service.py
+│   ├── magic_service.py
+│   └── event_service.py
+└── tests/
+
+## 6. WORLD CONTEXT
+
+Каждый игровой запрос должен понимать, в каком мире он выполняется.
+
+Контекст должен определяться до вызова игровой логики:
+
+Telegram user → выбранный world_id → персонаж/административный контекст → действие.
+
+Администратор с GLOBAL_ADMIN может переключать world_id без создания персонажа.
+
+WORLD_ADMIN и MODERATOR работают только в разрешённых мирах.
+
+## 7. ИГРОВОЕ ВРЕМЯ
+
+Каждый мир хранит собственную игровую дату.
+
+Единое правило проекта:
+
+1 реальный день = 1 игровой месяц.
+
+Переход игрового времени должен выполняться централизованным сервисом, а не отдельными обработчиками.
+
+Изменение даты должно запускать необходимые фоновые процессы:
+- старение;
+- беременность;
+- рождение детей;
+- смерть от старости;
+- события;
+- экономические обновления;
+- военные процессы;
+- другие механики, привязанные к календарю.
+
+## 8. СОБЫТИЙНАЯ СИСТЕМА
+
+Игровые события не должны быть жёстко зашиты в Telegram-обработчики.
+
+Рекомендуется единая система событий:
+
+GameEvent
+- id
+- world_id
+- type
+- game_date
+- source
+- payload
+- status
+
+Это позволит запускать как автономные события мира, так и административные ивенты.
+
+## 9. БЕЗОПАСНОСТЬ И ТРАНЗАКЦИИ
+
+Критические игровые изменения должны выполняться в транзакциях PostgreSQL.
+
+Особенно:
+- смерть персонажа;
+- рождение ребёнка;
+- изменение наследника;
+- передача территории;
+- изменение казны;
+- создание/расформирование армии;
+- изучение магии;
+- заключение брака;
+- административные действия.
+
+Для денежных и военных операций необходимо защищаться от двойного выполнения.
+
+## 10. МИГРАЦИИ
+
+Схема БД изменяется только через Alembic migrations.
+
+Нельзя вручную изменять рабочую БД так, чтобы структура расходилась с миграциями.
+
+Каждое изменение модели должно иметь соответствующую миграцию.
+
+## 11. РЕПОЗИТОРИИ И СЕРВИСНЫЙ СЛОЙ
+
+Игровая логика не должна напрямую выполнять SQL во всех обработчиках Telegram.
+
+Рекомендуемая цепочка:
+
+Telegram Handler → Service → Repository → PostgreSQL
+
+Это позволит менять интерфейс бота, не переписывая игровую логику.
+
+## 12. КЭШ И ВРЕМЕННЫЕ ДАННЫЕ
+
+Redis используется только для данных, которые не являются единственным источником истины:
+- FSM состояния;
+- кэш часто читаемых данных;
+- временные блокировки;
+- очереди;
+- rate limits.
+
+Ключевые игровые данные всегда хранятся в PostgreSQL.
+
+## 13. ЛОГИРОВАНИЕ И АУДИТ
+
+Критические действия должны иметь аудит:
+- кто выполнил действие;
+- world_id;
+- объект;
+- действие;
+- старое состояние;
+- новое состояние;
+- время.
+
+Особенно важны административные действия и изменения экономики, армии, территории и персонажей.
+
+## 14. ПРИНЦИП РАСШИРЕНИЯ
+
+Новая игровая механика должна добавляться как отдельный модуль и связываться с существующими сервисами, а не ломать world_id, календарь, права и транзакционную модель.
+
+Этот раздел является техническим фундаментом реализации проекта и может расширяться при появлении новых требований.
