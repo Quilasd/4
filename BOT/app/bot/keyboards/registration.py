@@ -11,6 +11,15 @@ def world_menu(worlds: list[tuple[int, str]]) -> InlineKeyboardMarkup:
     )
 
 
+def continent_menu(continents: list[tuple[str, str]]) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=name, callback_data=f"continent:{key}")]
+            for key, name in continents
+        ]
+    )
+
+
 def gender_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -22,10 +31,10 @@ def gender_menu() -> InlineKeyboardMarkup:
     )
 
 
-def race_menu(races: list[str]) -> InlineKeyboardMarkup:
+def race_menu(races: list[tuple[str, str]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=race, callback_data=f"race:{race}")]
-            for race in races
+            [InlineKeyboardButton(text=name, callback_data=f"race:{key}")]
+            for key, name in races
         ]
     )
