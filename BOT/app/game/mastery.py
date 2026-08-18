@@ -14,3 +14,9 @@ MASTERY_PATHS = {
     "cavalry": MasteryPath("cavalry", ("Новичок", "Всадник", "Опытный всадник", "Мастер кавалерии", "Великий всадник", "Рыцарь", "Легендарный рыцарь")),
     "magic": MasteryPath("magic", ("Ученик", "Маг", "Высший маг", "Великий маг", "Архимаг", "Верховный маг")),
 }
+
+
+def rank_for(path: str, mastery_level: int) -> str:
+    ranks = MASTERY_PATHS[path].names
+    index = max(0, min(mastery_level, len(ranks) - 1))
+    return ranks[index]
