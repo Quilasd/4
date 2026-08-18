@@ -2,8 +2,9 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.memory import MemoryStorage
 
-from app.bot.routers.start import router as start_router
+from app.bot.routers.registration import router as registration_router
 from app.config.settings import get_settings
 
 
@@ -12,8 +13,8 @@ async def run() -> None:
     logging.basicConfig(level=settings.log_level.upper())
 
     bot = Bot(token=settings.bot_token.get_secret_value())
-    dp = Dispatcher()
-    dp.include_router(start_router)
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(registration_router)
 
     try:
         await dp.start_polling(bot)
